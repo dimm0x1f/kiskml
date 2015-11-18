@@ -1,4 +1,4 @@
-__author__ = 'dimm'
+from __future__ import print_function
 from lxml import etree
 from time import strptime
 import pyshark
@@ -44,75 +44,71 @@ class ReadXML():
                                        int(child.get('signal_dbm', 0)),
                                        timestamp)
 
-                sta = stations.Station(child.get('bssid'), points=point)
+                sta = stations.Station(child.get('bssid'), points=fix_dbm(point))
                 stats.update(sta)
                 self.result.update(sta)
             child.clear()
         return stats
 
-    def sta_parse(self, sta):
-        data = dict()
-        bssid = sta.find('BSSID').text
-        data['type1'] = 'AP'
-        data['type2'] = sta.get('type')
-        data['manuf'] = sta.find('manuf').text
-        data['channel'] = int(sta.find('channel').text)
-        data['last_seen'] = strptime(sta.get('last-time'), self.timeformat)
-        data['first_seen'] = strptime(sta.get('first-time'), self.timeformat)
-        if not sta.find('gps-info') is None:
-            data['points'] = stations.Point(float(sta.find('gps-info/max-lat').text),
-                                            float(sta.find('gps-info/max-lon').text),
-                                            float(sta.find('gps-info/max-alt').text),
-                                            float(sta.find('gps-info/max-spd').text),
-                                            int(sta.find('snr-info/max_signal_dbm').text),)
-        elif not sta.find('snr-info') is None:
-            data['points'] = stations.Point(0, 0, 0, 0, int(sta.find('snr-info/max_signal_dbm').text),)
+    def sta_parse(self, data):
+        sta = stations.Station(data.find('BSSID').text)
+        sta.update(type1='AP', type2=data.get('type'), manuf=data.find('manuf').text)
+        sta.update(channel=int(data.find('channel').text))
+        sta.update(last_seen=strptime(data.get('last-time'), self.timeformat))
+        sta.update(first_seen=strptime(data.get('first-time'), self.timeformat))
+        if not data.find('gps-info') is None:
+            point = stations.Point(float(data.find('gps-info/max-lat').text),
+                                   float(data.find('gps-info/max-lon').text),
+                                   float(data.find('gps-info/max-alt').text),
+                                   float(data.find('gps-info/max-spd').text),
+                                   int(data.find('snr-info/max_signal_dbm').text))
+        elif not data.find('snr-info') is None:
+            point = stations.Point(0, 0, 0, 0, int(data.find('snr-info/max_signal_dbm').text))
         else:
-            data['points'] = stations.Point(0, 0, 0, 0, 0,)
+            point = stations.Point(0, 0, 0, 0, 0,)
+        sta.update(fix_dbm(point))
 
-        ssid = sta.find('SSID')
+        ssid = data.find('SSID')
         if not ssid is None:
-            data['encryption'] = set()
             for enc in ssid.findall('encryption'):
-                data['encryption'].update(enc.text.split('+'))
+                sta.update(encryption=enc.text.split('+'))
             essid = ssid.find('essid')
-            data['essid'] = essid.text
-            data['cloaked'] = True if ssid.find('essid').get('cloaked') == 'true' else False
-        for cli in sta.findall('wireless-client'):
-            client = self.client_parse(cli, bssid, data)
+            sta.update(essid=essid.text)
+            sta.update(cloaked=True if ssid.find('essid').get('cloaked') == 'true' else False)
+        for cli in data.findall('wireless-client'):
+            client = self.client_parse(cli, sta)
             if client:
-                data['connected'] = client.bssid
-        sta = stations.Station(bssid, **data)
+                sta.update(connected=client.bssid)
         self.result.update(sta)
         return sta
 
-    def client_parse(self, cli, sta_bssid, sta_data):
-        data = dict()
-        bssid = cli.find('client-mac').text
-        if bssid == sta_bssid:
+    def client_parse(self, data, sta):
+        bssid = data.find('client-mac').text
+        if bssid == sta:
             return None
-        if not cli.find('gps-info') is None:
-            data['points'] = stations.Point(float(cli.find('gps-info/max-lat').text),
-                                   float(cli.find('gps-info/max-lon').text),
-                                   float(cli.find('gps-info/max-alt').text),
-                                   float(cli.find('gps-info/max-spd').text),
-                                   int(cli.find('snr-info/max_signal_dbm').text),)
-        elif not cli.find('snr-info') is None:
-            data['points'] = stations.Point(0, 0, 0, 0, int(cli.find('snr-info/max_signal_dbm').text),)
+        cli = stations.Station(bssid)
+        if not data.find('gps-info') is None:
+            point = stations.Point(float(data.find('gps-info/max-lat').text),
+                                 float(data.find('gps-info/max-lon').text),
+                                 float(data.find('gps-info/max-alt').text),
+                                 float(data.find('gps-info/max-spd').text),
+                                 int(data.find('snr-info/max_signal_dbm').text))
+        elif not data.find('snr-info') is None:
+            point = stations.Point(0, 0, 0, 0, int(data.find('snr-info/max_signal_dbm').text))
         else:
-            data['points'] = stations.Point(0, 0, 0, 0, 0,)
-        data['type1'] = 'CL'
-        data['type2'] = cli.get('type')
-        data['manuf'] = cli.find('client-manuf').text
-        data['channel'] = int(cli.find('channel').text)
-        data['last_seen'] = strptime(cli.get('last-time'), self.timeformat)
-        data['first_seen'] = strptime(cli.get('first-time'), self.timeformat)
-        data['connected'] = sta_bssid
-        if sta_data.get('essid'):
-            data['probes_essid'] = sta_data.get('essid')
-        sta = stations.Station(bssid, **data)
-        self.result.update(sta)
-        return sta
+            point = stations.Point(0, 0, 0, 0, 0,)
+        cli.update(points=fix_dbm(point))
+        cli.update(type1='CL')
+        cli.update(type2=data.get('type'))
+        cli.update(manuf=data.find('client-manuf').text)
+        cli.update(channel=int(data.find('channel').text))
+        cli.update(last_seen=strptime(data.get('last-time'), self.timeformat))
+        cli.update(first_seen=strptime(data.get('first-time'), self.timeformat))
+        cli.update(connected=sta.bssid)
+        if sta.essid:
+            cli.update(probes_essid=sta.essid)
+        self.result.update(cli)
+        return cli
 
 class ReadPcap(object):
 
@@ -120,41 +116,53 @@ class ReadPcap(object):
         self.result = stations.Stations()
         self.filter = filter_
         for pf in files_:
-            cap = pyshark.FileCapture(pf, display_filter=self.filter)
-            for pack in cap:
-                if 'ppi' in pack and 'wlan' in pack and 'ta' in pack.wlan.field_names:
-                    data = dict()
-                    ta = str(pack.wlan.get_field('ta'))
-                    ra = str(pack.wlan.get_field('ra'))
-                    if ra and ra != 'ff:ff:ff:ff:ff:ff':
-                        data['connected'] = ra
-                    if 'wlan_mgt' in pack:
-                        chn = pack.wlan_mgt.get_field('ds_current_channel')
-                        if chn:
-                            data['channel'] = int(chn)
-                    if 'ppi_gps_lat' in pack.ppi.field_names:
-                        lat = float(pack.ppi.ppi_gps_lat.replace(',','.'))
-                        lon = float(pack.ppi.ppi_gps_lon.replace(',','.'))
-                        alt = pack.ppi.get_field('ppi_gps_alt')
-                        if not alt:
-                            alt = 0
-                        else:
-                            alt = float(alt.replace(',','.'))
-                        dbm = pack.ppi.get_field('80211_common_dbm_antsignal')
-                        if not dbm:
-                            dbm = 0
-                        else:
-                            dbm = int(pack.ppi.get_field('80211_common_dbm_antsignal'))
-                        data['points'] = stations.Point(lat, lon, alt, 0, dbm, float(pack.sniff_timestamp),
-                                                        ra=ra)
-                    if 'wlan_mgt' in pack and pack.wlan.fc_type_subtype == '8':
-                        ssid = pack.wlan_mgt.get_field('ssid')
-                        data['type1'] = 'AP'
-                        if ssid and ssid != 'SSID: ':
-                            data['essid'] = ssid
-                    sta = stations.Station(ta, **data)
-                    self.result.update(sta)
+            print('Analyze {}'.format(pf), end='\t')
+            try:
+                cap = pyshark.FileCapture(pf, display_filter=self.filter)
+                for pack in cap:
+                    if 'ppi' in pack and 'wlan' in pack and 'ta' in pack.wlan.field_names:
+                        ta = str(pack.wlan.get_field('ta'))
+                        sta = stations.Station(ta)
+                        ra = str(pack.wlan.get_field('ra'))
+                        if ra:
+                            if ra != 'ff:ff:ff:ff:ff:ff':
+                                sta.update(connected=ra)
+                                self.result.update(stations.Station(ra, connected=ta))
+                        if 'ppi_gps_lat' in pack.ppi.field_names and 'ppi_gps_lon' in pack.ppi.field_names:
+                            lat = float(pack.ppi.ppi_gps_lat.replace(',', '.'))
+                            lon = float(pack.ppi.ppi_gps_lon.replace(',', '.'))
+                            alt = pack.ppi.get_field('ppi_gps_alt')
+                            if not alt:
+                                alt = 0
+                            else:
+                                alt = float(alt.replace(',', '.'))
+                            dbm = pack.ppi.get_field('80211_common_dbm_antsignal')
+                            if not dbm:
+                                dbm = 0
+                            else:
+                                dbm = int(pack.ppi.get_field('80211_common_dbm_antsignal'))
+                            sta.update(points=fix_dbm(stations.Point(lat, lon, alt, 0, dbm,
+                                                      float(pack.sniff_timestamp), ra=ra)))
+                        if 'wlan_mgt' in pack:
+                            chn = pack.wlan_mgt.get_field('ds_current_channel')
+                            if chn:
+                                sta.update(channel=int(chn))
+                            if pack.wlan.fc_type_subtype == '8':
+                                ssid = pack.wlan_mgt.get_field('ssid')
+                                if ssid and ssid != 'SSID: ':
+                                    sta.update(essid=ssid)
+                                sta.update(type1='AP')
+                        self.result.update(sta)
+            except pyshark.capture.capture.TSharkCrashException as err:
+                print('FAIL')
+            else:
+                print('DONE')
         pass
 
     def get_result(self):
         return self.result
+
+def fix_dbm(point):
+    if point.dbm > 0:
+        point.dbm = -point.dbm
+    return point
