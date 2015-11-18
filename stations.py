@@ -84,6 +84,13 @@ class Stations(dict):
         def elem_upd(elem):
             if elem in self:
                 self[elem].update(points=elem.points)
+                self[elem].update(probes_essid=elem.probes_essid)
+                self[elem].update(connected=elem.connected)
+                self[elem].update(channel=elem.channel)
+                self[elem].update(type1=elem.type1)
+                self[elem].update(type2=elem.type2)
+                self[elem].update(encryption=elem.encryption)
+                self[elem].update(essid=elem.essid)
             else:
                 dict.update(self, {elem.bssid: elem})
 
