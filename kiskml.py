@@ -1,10 +1,13 @@
 #!/usr/bin/python
+from __future__ import print_function
+
 __author__ = 'dimm'
 import optparse
 import kml
 import parsers
 from stations import Stations
 import glob
+
 
 def show_all(stats):
     res_str = ''
@@ -55,13 +58,17 @@ def main():
                 xmls.append(f)
             else:
                 print('"*.{}" is not supported!'.format(t))
-    pcap_reader = parsers.ReadPcap(pcaps, opts.filter)
-    xml_reader = parsers.ReadXML(xmls)
     result = Stations()
-    result.update(pcap_reader.get_result())
-    result.update(xml_reader.get_result())
-    del pcap_reader
-    del xml_reader
+    if pcaps:
+        print('Reading {} pcap files'.format(len(pcaps)))
+        pcap_reader = parsers.ReadPcap(pcaps, opts.filter)
+        result.update(pcap_reader.get_result())
+        del pcap_reader
+    if xmls:
+        print('Reading {} xml files'.format(len(xmls)))
+        xml_reader = parsers.ReadXML(xmls)
+        result.update(xml_reader.get_result())
+        del xml_reader
 
     if opts.show and opts.kml_file != '-':
         show = show_all(result)
@@ -69,7 +76,7 @@ def main():
     if opts.kml_file:
         kml_f = kml.build_kml(result)
         if opts.kml_file == '-':
-            print kml_f.kml()
+            print(kml_f.kml())
         else:
             kml_f.save(opts.kml_file)
 
