@@ -66,7 +66,7 @@ class ReadXML():
             point = stations.Point(0, 0, 0, 0, int(data.find('snr-info/max_signal_dbm').text))
         else:
             point = stations.Point(0, 0, 0, 0, 0,)
-        sta.update(fix_dbm(point))
+        sta.update(points=fix_dbm(point))
 
         ssid = data.find('SSID')
         if not ssid is None:

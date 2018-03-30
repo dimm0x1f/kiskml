@@ -7,6 +7,7 @@ TA: {}<br />
 RA: {}<br />
 Channel: {}<br />
 Time: {}<br />
+Chipter: {}<br />
 GPS: {}"""
 
 redstyle = simplekml.Style()
@@ -31,7 +32,7 @@ def build_kml(stats, out=None):
             pnt = fold.newpoint(name=str(p.dbm))
             timst = strftime('%a %b %d %H:%M:%S %Y', localtime(p.timestamp))
             pnt.description = descr.format(sta.essid, sta.bssid, p.other.get('ra'), sta.channel,
-                                           timst, ','.join((str(p.lat), str(p.lon))))
+                                           timst, ' '.join(sta.encryption), ','.join((str(p.lat), str(p.lon))))
             pnt.coords=[(p.lon, p.lat, p.alt)]
             if p.dbm <= -80:
                 pnt.style = redstyle
